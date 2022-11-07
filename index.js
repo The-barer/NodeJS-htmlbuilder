@@ -1,3 +1,6 @@
+const { readdir, readFile } = require('fs/promises');
+const { createWriteStream } = require('fs');
+
 const fs = require('fs')
 const fsp = require('fs/promises')
 const path = require('path')
@@ -7,9 +10,13 @@ const assets = path.join(__dirname, 'assets')
 const componentsDir = path.join(__dirname, 'components')
 const destFolder = path.join(__dirname, 'project-dist')
 
+const OUTPUT_STYLE_FILE = 'style.css';
+const STYLES_FORMATS = ['.css'];
+const ENCODING_FORMAT = 'utf8';
+
 buildPage()
 
-async function buildPage() {  
+async function buildPage() {
     try {
         await fsp.rm(destFolder, { recursive: true } )
     }
@@ -21,27 +28,28 @@ async function buildPage() {
     createIndexHtml()
 }
 
-function mergeStyles(startPath, destPath) {
-    const styleStream = fs.createWriteStream(path.join(destPath, 'style.css'))
-    fs.readdir(startPath, { withFileTypes: true }, (err, files) => {
-        if (err) {
-            throw err
-        }
-        for (let file of files) {
-            const filePath = path.join(startPath, file.name)
-            if(file.isDirectory()) {
-                return
-            } 
-            else if(path.extname(filePath) === '.css') {
-                fs.readFile(filePath,'utf-8',(err, data) => {
-                    if(err) {
-                        throw err
-                    }
-                    styleStream.write(data+'\n')
-                })
+// https://www.geeksforgeeks.org/node-js-fs-promise-readdir-method/
+
+async function mergeStyles(inputPath, outputPath) {
+    // use const for name like style.css
+    try {
+        const styleStream = await createWriteStream(path.join(outputPath, OUTPUT_STYLE_FILE))
+        const files = await readdir(inputPath, { withFileTypes: true });
+
+        files.forEach(async (file) => {
+            if(file.isDirectory()) return;
+
+            const filePath = path.join(inputPath, file.name)
+
+            if(STYLES_FORMATS.includes(path.extname(filePath))) {
+                const fileData = await readFile(filePath, { encoding: ENCODING_FORMAT });
+
+                styleStream.write(fileData+'\n');
             }
-        }
-    })   
+        })
+    } catch (err) {
+        console.error('mergeStyles', err);
+    }
 }
 
 function copyFiles(startPath, destPath) {
@@ -58,7 +66,7 @@ function copyFiles(startPath, destPath) {
                 const destFilePath = path.join(destPath, file.name)
                 if(file.isDirectory()) {
                     copyFiles(origfilePath, destFilePath)
-                } 
+                }
                 else if(file.isFile()) {
                     fs.copyFile(origfilePath, destFilePath, ()=> {})
                 }
